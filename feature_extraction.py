@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import librosa
 import os
+import sys
 
 print("Done importing")
 
@@ -76,18 +77,19 @@ def convert_audios_to_wav(path):
             counter += 1
     return directory
     
-def generate_csv(path, output, is_mp3=False, label=""):
+def generate_csv(path, output, format, is_mp3=False, label=""):
     """
         extract all audio feature inside path to csv file
         path    : path that contains audio files
         output  : csv output file name
+        format  : .wav or .au
         label   : genre of audio files
         is_mp3  : is audio in mp3 format or not
         
     """
     if is_mp3:
         path = convert_audios_to_wav(path)
-    files = [path + x for x in os.listdir(path) if ".wav" in x]
+    files = [path + x for x in os.listdir(path) if format in x]
     
     features = AudioExtractor(files[0]).extract()
     features["Target"] = label
@@ -101,4 +103,4 @@ def generate_csv(path, output, is_mp3=False, label=""):
         df = pd.concat([df, temp])
     df.to_csv(output, index=False)
     
-generate_csv("./converted/", "data.csv", label="coba")
+generate_csv(sys.argv[1], sys.argv[2], sys.argv[3], label=sys.argv[4])
