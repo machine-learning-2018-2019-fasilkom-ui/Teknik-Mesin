@@ -1,16 +1,26 @@
+from sklearn import tree
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
+from sklearn import datasets
+from sklearn.metrics import accuracy_score
 import numpy as np
 import pandas as pd
 import random
 
-data = pd.read_csv('tennis.csv')
-data["Day"] = data["Day"].astype(str)
+print("Done importing")
+
+def split(df, label):
+    X = data.drop(columns=label)
+    y = data[label]
+    return X, y
 
 class Tree:
-    def __init__(self, is_leaf, label, threshold=None):
+    def __init__(self, is_leaf, label, threshold, gain):
         self.branches = {}
         self.is_leaf = is_leaf
         self.label = label
         self.threshold = threshold
+        self.gain = gain
 
     def add(self, branch, subtree):
         self.branches[branch] = subtree
@@ -23,11 +33,25 @@ class Tree:
             return curr_node.label
         else:
             value = inputs.get(curr_node.label)
-            functions = list(curr_node.branches.keys())
-            for function in functions:
-                if function(value):
-                    temp = curr_node.branches.get(function)
-                    return self.traverseHelper(temp, inputs)
+            temp = None
+            if type(value) is str:
+                temp = curr_node.branches.get(value)
+            else:
+                threshold = curr_node.threshold
+                temp2 = "<="+str(threshold) if value <= threshold else ">"+str(threshold)
+                temp = curr_node.branches.get(temp2)
+            return self.traverseHelper(temp, inputs)
+    
+    def cetak(self):
+        queue = [self]
+        while len(queue) > 0:
+            curr = queue.pop(0)
+            print(curr, curr.branches)
+            for x in curr.branches:
+                queue.append(curr.branches[x])
+
+    def __repr__(self):
+        return self.label + " : " + str(round(self.gain,4))
             
 class DecisionTreeClassifier:
     
@@ -73,51 +97,52 @@ class DecisionTreeClassifier:
             return 0
         return a/b
 
-    def get_threshold(self, T, attribute):
-        column = T[attribute].sort_values()
-        v = list(column)
-        thresholds = []
-        if (column.dtype == "float64"):
-            for i in range(len(v)-1):
-                t = (v[i] + v[i+1])//2
-                thresholds.append(t)
-        elif (column.dtype == "int64"):
-            thresholds = v
-        return sorted(list(set(thresholds)))
-
     def best_threshold(self, T, attribute):
-        thresholds = self.get_threshold(T, attribute)
+        # v = list(T[attribute].quantile([.2, .4, .6, .8]))
+        v = [T[attribute].mean()]
         max_value = -1
         max_thres = None
-        for threshold in thresholds:
-            gr = self.gain_ratio(T, [T[T[attribute] <= threshold], T[T[attribute] > threshold]])
+        for t in v:
+            gr = self.gain_ratio(T, [T[T[attribute] <= t], T[T[attribute] > t]])
             if gr > max_value:
                 max_value = gr
-                max_thres = threshold
+                max_thres = t
         return max_thres
         
-    def split_attribute(self, T, attributes):
+    def least_attribute_gains(self, columns, top_count=10):
+        gains = self.split_attribute(self.T, X.columns, is_find_top=True)
+        top = sorted(gains)[-1:-min([top_count, len(columns)]):-1]
+        for x in top:
+            gains.pop(x)
+        return list(gains.values())
+        
+        
+    def split_attribute(self, T, attributes, is_find_top=False):
         best_value = -1
         best_attrs = None
         best_thres = None
-        splitted = []
+        all_gains = {}
+        splitted = {}
         for attribute in attributes:
             threshold = None
-            subsets = []
+            subsets = {}
             if (T[attribute].dtype in ["int64", "float64"]):
                 threshold = self.best_threshold(T, attribute)
-                subsets.append(T[T[attribute] <= threshold])
-                subsets.append(T[T[attribute] > threshold])
+                subsets["<="+str(threshold)] = (T[T[attribute] <= threshold])
+                subsets[">"+str(threshold)] = (T[T[attribute] > threshold])
             else:
-                for vk in T[attribute].unique():
-                    subsets.append(T[T[attribute] == vk])
-            gr = self.gain_ratio(T, subsets)
+                for vk in self.T[attribute].unique():
+                    subsets[vk] = T[T[attribute] == vk]
+            gr = self.gain_ratio(T, list(subsets.values()))
             if gr > best_value:
                 best_value = gr
                 best_attrs = attribute
                 best_thres = threshold
                 splitted = subsets
-        return best_attrs, best_thres, splitted
+            all_gains[round(gr*10000)] = attribute
+        if is_find_top:
+            return all_gains
+        return best_attrs, best_thres, splitted, best_value
     
     def is_pure(self, T):
         values = T[self.target].unique()
@@ -137,44 +162,48 @@ class DecisionTreeClassifier:
     def fit(self, X, y):
         self.T = pd.concat([X, y], axis=1)
         self.target = y.name
-        self.tree = self.dtl(self.T.copy(), list(X.columns), self.T.copy())
+        dropped = self.least_attribute_gains(X.columns)
+        print(self.T.shape)
+        self.T = self.T.drop(columns=dropped)
+        print(self.T.shape)
+        # self.tree = self.dtl(self.T.copy(), list(X.columns), self.T.copy())
         
     def dtl(self, examples, attributes, parent_examples):
+        print(len(attributes))
         if len(examples) == 0:
-            return Tree(True, self.plurality_value(parent_examples))
+            return Tree(True, self.plurality_value(parent_examples), None, 0)
         elif self.is_pure(examples):
-            return Tree(True, self.same_class(examples))
+            return Tree(True, self.same_class(examples), None, 0)
         elif len(attributes) == 0:
-            return Tree(True, self.plurality_value(examples))
+            return Tree(True, self.plurality_value(examples), None, 0)
         else:
-            best_attr, best_thres, splitted = self.split_attribute(examples, attributes)
+            best_attr, best_thres, splitted, gr = self.split_attribute(examples, attributes)
             attributes.remove(best_attr)
-            tree = Tree(False, best_attr, best_thres)
-            for child in splitted:
-                value = None
-                if best_thres is None:
-                    value = lambda x : x == child[best_attr].unique()[0]
-                else:
-                    maks = max(child[best_attr])
-                    if maks <= best_thres:
-                        value = lambda x : x <= best_thres
-                    else:
-                        value = lambda x : x > best_thres
-                tree.add(value, self.dtl(child, attributes, examples))
+            tree = Tree(False, best_attr, best_thres, gr)
+            for branch in splitted.keys():
+                tree.add(branch, self.dtl(splitted[branch], attributes, examples))
             return tree
-            
-    def predict(self, inputs):
-        return self.tree.traverse(inputs)
-        
-X = data.drop(["Decision", "Day"], axis=1)
-y = data["Decision"]
+
+    def predict(self, X):
+        predictions = []
+        for i in X.index:
+            temp = X.loc[i].to_dict()
+            predictions.append(self.tree.traverse(temp))
+        return predictions
+    
+    def score(self, X, y):
+        return accuracy_score(y, self.predict(X))
+
+data = pd.read_csv('data_all_3.csv')
+X, y = split(data, "Target")
 clf = DecisionTreeClassifier()
 clf.fit(X, y)
-inputs = {
-    "Day":1,
-    "Outlook":"Sunny",
-    "Temp.":85,
-    "Humidity":85,
-    "Wind":"Weak",
-}
-print(clf.predict(inputs))
+res = 0
+for v in range(10):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    clf = tree.DecisionTreeClassifier()
+    clf = DecisionTreeClassifier()
+    clf.fit(X_train, y_train)
+    res += clf.score(X_test, y_test)
+print(res/10)
