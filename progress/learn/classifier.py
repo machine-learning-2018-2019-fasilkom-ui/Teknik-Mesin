@@ -173,20 +173,23 @@ class DT:
         return type(self.X[0][col_idx]) is str
 
     def best_threshold(self, T_index, col_idx):
-        candidates = sorted(self.X[T_index, col_idx])
-        n = len(candidates)
-        result = [candidates[int(_ * n - .5)] for _ in [.4, .6]]
-        best = None
-        maks = -1
-        for res in result:
-            func1, func2 = Func("<=", res), Func(">", res)
-            subsets1 = self.get_by_value(T_index, col_idx, func1)
-            subsets2 = self.get_by_value(T_index, col_idx, func2)
-            gain = self.gain(T_index, [subsets1, subsets2])
-            if gain > maks:
-                best = res
-                maks = gain
-        return best
+        matrix_size = len(self.row_idxs) * len(self.col_idxs)
+        if matrix_size < 1000:
+            candidates = sorted(self.X[T_index, col_idx])
+            n = len(candidates)
+            result = [candidates[int(_ * n - .5)] for _ in [.4, .6]]
+            best = None
+            maks = -1
+            for res in result:
+                func1, func2 = Func("<=", res), Func(">", res)
+                subsets1 = self.get_by_value(T_index, col_idx, func1)
+                subsets2 = self.get_by_value(T_index, col_idx, func2)
+                gain = self.gain(T_index, [subsets1, subsets2])
+                if gain > maks:
+                    best = res
+                    maks = gain
+            return best
+        return np.mean(self.X[T_index, col_idx])
 
     def split_attribute(self, T_index, col_idxs, is_find_top=False):
         best_value, best_attrs, best_thres, splitted = -1, None, None, {}
@@ -234,13 +237,14 @@ class DT:
     def initialize(self, X, y):
         self.X = X
         self.y = y
-        self.row_idxs = [i for i in range(len(X))]
-        self.col_idxs = [j for j in range(len(X[0]))]
-        for col_idx in self.col_idxs:
-            if self.is_categorical(col_idx):
-                self.domain[col_idx] = set()
-                for row_idx in self.row_idxs:
-                    self.domain[col_idx].add(self.X[row_idx, col_idx])
+        if (self.row_idxs is None) and (self.col_idxs is None):
+            self.row_idxs = [i for i in range(len(X))]
+            self.col_idxs = [j for j in range(len(X[0]))]
+            for col_idx in self.col_idxs:
+                if self.is_categorical(col_idx):
+                    self.domain[col_idx] = set()
+                    for row_idx in self.row_idxs:
+                        self.domain[col_idx].add(self.X[row_idx, col_idx])
 
     def fit(self, X, y):
         X = np.array(X)
@@ -254,7 +258,7 @@ class DT:
 
     def to_dict(self, xi):
         result = {}
-        for i in range(len(xi)):
+        for i in self.col_idxs:
             result[i] = xi[i]
         return result
 
@@ -317,5 +321,52 @@ class KNN:
             neighbors_index = self.get_neighbors(xi)
             predicted.append(self.get_majority(neighbors_index))
         return predicted
+
+
+# --------------------------------------------------------------------------------
+
+
+# --------------------------------------------------------------------------------
+#                          Random Forest Classifier
+# --------------------------------------------------------------------------------
+
+class RandomForest:
+
+    def __init__(self, n_estimators):
+        self.n_estimators = n_estimators
+        self.X = None
+        self.y = None
+        self.forest = None
+
+    def fit(self, X, y):
+        self.X = np.array(X)
+        self.y = np.array(y)
+        self.forest = self.build_forest()
+
+    def build_forest(self):
+        forest = []
+        m, n = self.X.shape
+        k = m
+        l = int(math.sqrt(n))
+        for i in range(self.n_estimators):
+            dt = DT()
+            dt.row_idxs = np.random.choice(m, k)
+            dt.col_idxs = list(set(np.random.choice(n, l)))
+            dt.fit(self.X, self.y)
+            forest.append(dt)
+        return forest
+
+    def predict(self, X):
+        X = np.array(X)
+        y_pred = []
+        for xi in X:
+            predictions = {}
+            for dt in self.forest:
+                predicted = dt.predict(xi.reshape(1, -1))[0]
+                predictions[predicted] = predictions.get(predicted, 0) + 1
+            sorted_votes = list(predictions.items())
+            sorted_votes.sort(key=operator.itemgetter(1))
+            y_pred.append(sorted_votes[-1][0])
+        return y_pred
 
 # --------------------------------------------------------------------------------
