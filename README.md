@@ -19,6 +19,8 @@ Fitur Musik yang digunakan adalah :
 - Spectral Rolloff (1 fitur)
 - Spectral Contrast (7 fitur)
 
+Cara Ekstraksi dapat dilihat pada https://librosa.github.io/librosa/feature.html, kemudian proses ekstraksi menggunakan [feature_extraction.py](https://github.com/machine-learning-2018-2019-fasilkom-ui/Teknik-Mesin/blob/dev/feature_extraction.py)
+
 Sehingga terdapat 45 fitur audio/musik, masing - masing dihitung statistiknya (mean dan standard deviation) menghasilkan total fitur sebesar **90 fitur**
 
 Prediksi hanya dilakukan pada genre musik country, classical, metal, dan hip-hop ---- [Ekperimen Pengurangan Genre](https://github.com/machine-learning-2018-2019-fasilkom-ui/Teknik-Mesin/blob/dev/Experiments_Data_Reducing.ipynb) ----
@@ -43,9 +45,10 @@ Dataset akhir dihasilkan 400 baris (100 baris masing - masing genre) dan 91 kolo
    - Kompleksitas masih tinggi kemungkinan karena menggunakan algoritma c4.5
    
 ## Lain - Lain
-Library luar yang digunakan adalah numpy, pandas dan sklearn
+Library luar yang digunakan adalah librosa, numpy, pandas dan sklearn
+- librosa untuk ekstraksi fitur audio/musik
 - numpy digunakan pada semua implementasi klasifikasi
-- pandas hanya digunakan untuk membuka csv dan memisahkan kolom variabel/fitur dengan kolom output
+- pandas digunakan untuk membuka atau membuat csv dan memisahkan kolom variabel/fitur dengan kolom output
 - sklearn digunakan untuk memecah data ke data training dan testing, sklearn juga digunakan sebagai pembanding algoritma yang diimplementasikan sendiri 
 - Perbandingan algoritma sklearn dan implementasi sendiri terdapat pada [Eksperimen Perbandingan](https://github.com/machine-learning-2018-2019-fasilkom-ui/Teknik-Mesin/blob/dev/Experiments_Classifier_Testing.ipynb)
 
