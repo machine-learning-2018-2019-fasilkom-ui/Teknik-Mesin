@@ -11,11 +11,28 @@ class AudioExtractor:
 
     def __init__(self, file):
         self.file = file
-        self.features = dict(chroma_stft=12, mfcc=12, rmse=1, zcr=1)
-        self.stats = ('mean', 'std')
+        self.features = dict(
+            chroma_stft=12,
+            chroma_cqt=12,
+            # chroma_cens=1,
+            # spectral_centroid=1,
+            spectral_bandwidth=1,
+            spectral_contrast=1,
+            spectral_rolloff=1,
+            mfcc=12, 
+            # rmse=1, 
+            # zcr=1
+        )
+        self.stats = (
+            'mean', 
+            'std',
+            # 'median',
+            # 'min',
+            # 'max',
+        )
         
     def read_audio(self):
-        data, sampling_rate = librosa.load(self.file, res_type='kaiser_fast', duration=30.0)
+        data, sampling_rate = librosa.load(self.file, res_type='kaiser_fast', duration=3.0)
         return data, sampling_rate
         
     def count_stats(self, data):
@@ -25,6 +42,8 @@ class AudioExtractor:
                 all_stats[stat] = np.mean(data, axis=1)
             elif stat == 'std':
                 all_stats[stat] = np.std(data, axis=1)
+            elif stat == 'median':
+                all_stats[stat] = np.median(data, axis=1)
             elif stat == 'min':
                 all_stats[stat] = np.min(data, axis=1)
             elif stat == 'max':
@@ -33,12 +52,27 @@ class AudioExtractor:
         
     def extract(self):
         data, sampling_rate = self.read_audio()
+        S = np.abs(librosa.stft(data))
         fixed_features = {}
         for feature in self.features:
             coeff = self.features[feature]
             counted_stats = None
             if feature == "chroma_stft":
                 counted_stats = self.count_stats(librosa.feature.chroma_stft(y=data, sr=sampling_rate, n_chroma=coeff))
+            elif feature == "chroma_cqt":
+                counted_stats = self.count_stats(librosa.feature.chroma_cqt(y=data, sr=sampling_rate, n_chroma=coeff))
+            elif feature == "chroma_cens":
+                counted_stats = self.count_stats(librosa.feature.chroma_cens(y=data, sr=sampling_rate, n_chroma=coeff))
+                
+            elif feature == "spectral_centroid":
+                counted_stats = self.count_stats(librosa.feature.spectral_centroid(y=data, sr=sampling_rate))
+            elif feature == "spectral_bandwidth":
+                counted_stats = self.count_stats(librosa.feature.spectral_bandwidth(y=data, sr=sampling_rate))
+            elif feature == "spectral_contrast":
+                counted_stats = self.count_stats(librosa.feature.spectral_contrast(S=S, sr=sampling_rate))
+            elif feature == "spectral_rolloff":
+                counted_stats = self.count_stats(librosa.feature.spectral_rolloff(y=data, sr=sampling_rate))
+                
             elif feature == "mfcc":
                 counted_stats = self.count_stats(librosa.feature.mfcc(y=data, sr=sampling_rate, n_mfcc=coeff))
             elif feature == "rmse":
@@ -91,16 +125,23 @@ def generate_csv(path, output, format, is_mp3=False, label=""):
         path = convert_audios_to_wav(path)
     files = [path + x for x in os.listdir(path) if format in x]
     
+    m = len(files)
     features = AudioExtractor(files[0]).extract()
     features["Target"] = label
     df = pd.DataFrame(features)
-    print(1, "files extracted")
-    for i in range(1,len(files)):
-        print(i+1, "files extracted")
+    print(1, "/", m, "files extracted")
+    for i in range(1, m):
+        print(i+1, "/", m, "files extracted")
         features = AudioExtractor(files[i]).extract()
         features["Target"] = label
         temp = pd.DataFrame(features)
         df = pd.concat([df, temp])
     df.to_csv(output, index=False)
+
+root = './genres/'
+genres = [_ for _ in os.listdir(root)]
+for genre in genres:
+    label = genre
+    dir = root + genre + "/"
+    generate_csv(dir, label + '.csv', 'au', label=label)
     
-generate_csv(sys.argv[1], sys.argv[2], sys.argv[3], label=sys.argv[4])

@@ -170,26 +170,24 @@ class DT:
         return curr_tree
 
     def is_categorical(self, col_idx):
-        return type(self.X[0][col_idx]) is str
+        return type(self.X[0, col_idx]) is str
 
     def best_threshold(self, T_index, col_idx):
-        matrix_size = len(self.row_idxs) * len(self.col_idxs)
-        if matrix_size < 1000:
-            candidates = sorted(self.X[T_index, col_idx])
-            n = len(candidates)
-            result = [candidates[int(_ * n - .5)] for _ in [.4, .6]]
-            best = None
-            maks = -1
-            for res in result:
-                func1, func2 = Func("<=", res), Func(">", res)
-                subsets1 = self.get_by_value(T_index, col_idx, func1)
-                subsets2 = self.get_by_value(T_index, col_idx, func2)
-                gain = self.gain(T_index, [subsets1, subsets2])
-                if gain > maks:
-                    best = res
-                    maks = gain
-            return best
-        return np.mean(self.X[T_index, col_idx])
+        candidates = sorted(self.X[T_index, col_idx])
+        n = len(candidates)
+        result = [candidates[int(_ * n - .5)] for _ in [.3, .5, .7]]
+        result.append(np.mean(self.X[T_index, col_idx]))
+        best = None
+        maks = -1
+        for res in result:
+            func1, func2 = Func("<=", res), Func(">", res)
+            subsets1 = self.get_by_value(T_index, col_idx, func1)
+            subsets2 = self.get_by_value(T_index, col_idx, func2)
+            gain = self.gain(T_index, [subsets1, subsets2])
+            if gain > maks:
+                best = res
+                maks = gain
+        return best
 
     def split_attribute(self, T_index, col_idxs, is_find_top=False):
         best_value, best_attrs, best_thres, splitted = -1, None, None, {}
