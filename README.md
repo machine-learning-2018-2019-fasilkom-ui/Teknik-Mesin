@@ -41,8 +41,16 @@ Dataset akhir dihasilkan 400 baris (100 baris masing - masing genre) dan 91 kolo
    - Diambil vektor - vektor yang paling dekat dengan vektor input sebanyak k buah
    - Banyak k sama dengan banyak genre musik yang ada (k=4)
 3. Random Forest
-   - Implementasi menggunakan decision tree dengan algoritma c4.5
-   - Kompleksitas masih tinggi kemungkinan karena menggunakan algoritma c4.5
+   - Terdiri dari beberapa estimators/tree (pada aplikasi ini menggunakan 100 tree)
+   - Proses fit pada random subset untuk setiap tree
+   - Membangun tree menggunakan algoritma decision tree CART
+4. Decision Tree dengan algoritma CART
+   - Menggunakan gini index untuk kriteria split
+   - Dapat dilakukan pada variabel kontinu atau numerik
+   - Penetuan threshold pada variable kontinu hanya mengambil mean
+   
+## Contoh Aplikasi
+---- [program.ipynb](https://github.com/machine-learning-2018-2019-fasilkom-ui/Teknik-Mesin/blob/dev/program.ipynb) ----
    
 ## Lain - Lain
 Library luar yang digunakan adalah librosa, numpy, pandas dan sklearn
