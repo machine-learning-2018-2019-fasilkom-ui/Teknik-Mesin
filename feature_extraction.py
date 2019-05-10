@@ -31,8 +31,8 @@ class AudioExtractor:
             # 'max',
         )
         
-    def read_audio(self):
-        data, sampling_rate = librosa.load(self.file, res_type='kaiser_fast', duration=3.0)
+    def read_audio(self, duration):
+        data, sampling_rate = librosa.load(self.file, res_type='kaiser_fast', duration=duration)
         return data, sampling_rate
         
     def count_stats(self, data):
@@ -50,8 +50,8 @@ class AudioExtractor:
                 all_stats[stat] = np.max(data, axis=1)
         return all_stats
         
-    def extract(self):
-        data, sampling_rate = self.read_audio()
+    def extract(self, duration=3.0):
+        data, sampling_rate = self.read_audio(duration)
         S = np.abs(librosa.stft(data))
         fixed_features = {}
         for feature in self.features:
@@ -138,10 +138,11 @@ def generate_csv(path, output, format, is_mp3=False, label=""):
         df = pd.concat([df, temp])
     df.to_csv(output, index=False)
 
-root = './genres/'
-genres = [_ for _ in os.listdir(root)]
-for genre in genres:
-    label = genre
-    dir = root + genre + "/"
-    generate_csv(dir, label + '.csv', 'au', label=label)
+def start():
+    root = './genres/'
+    genres = [_ for _ in os.listdir(root)]
+    for genre in genres:
+        label = genre
+        dir = root + genre + "/"
+        generate_csv(dir, label + '.csv', 'au', label=label)
     

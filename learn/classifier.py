@@ -18,19 +18,23 @@ class Func:
             return self.label == x
         elif self.rel == ">":
             return x > self.label
-        return x <= self.label
+        elif self.rel == ">=":
+            return x >= self.label
+        elif self.rel == "<":
+            return x < self.label
+        elif self.rel == "<=":
+            return x <= self.label
 
     def __repr__(self):
         return str(self.rel) + str(self.label)
 
 
 class Tree:
-    def __init__(self, is_leaf, label, threshold, gain, distribution):
+    def __init__(self, is_leaf, label, score, distribution):
         self.branches = {}
         self.is_leaf = is_leaf
         self.label = label
-        self.threshold = threshold
-        self.gain = gain
+        self.score = score
         self.distribution = distribution
 
     def add(self, branch, subtree):
@@ -67,13 +71,15 @@ class Tree:
 
 
 class DT:
-    def __init__(self):
+    def __init__(self, algo='c4.5'):
         self.tree = None
         self.X = None
         self.y = None
         self.row_idxs = None
         self.col_idxs = None
+        self.classes = None
         self.domain = {}
+        self.algo = algo
 
     def log2(self, k):
         return 0 if k == 0 else math.log2(k)
@@ -173,10 +179,7 @@ class DT:
         return type(self.X[0, col_idx]) is str
 
     def best_threshold(self, T_index, col_idx):
-        candidates = sorted(self.X[T_index, col_idx])
-        n = len(candidates)
-        result = [candidates[int(_ * n - .5)] for _ in [.3, .5, .7]]
-        result.append(np.mean(self.X[T_index, col_idx]))
+        result = list(np.quantile(self.X[T_index, col_idx], [.3, .5, .7]))
         best = None
         maks = -1
         for res in result:
@@ -212,22 +215,62 @@ class DT:
             return gains
         return best_attrs, best_thres, splitted, best_value
 
+    def get_groups(self, col_idx, T_index, threshold):
+        less_than, greater_equal = [], []
+        for i in T_index:
+            if self.X[i, col_idx] < threshold:
+                less_than.append(i)
+            else:
+                greater_equal.append(i)
+        return less_than, greater_equal
+
+    def gini_index(self, groups):
+        m = float(sum([len(group) for group in groups]))
+        gini = 0.0
+        for group in groups:
+            size = len(group)
+            if size > 0:
+                score = 0.0
+                for value in self.classes:
+                    p = [self.y[i] for i in group].count(value) / size
+                    score += p * p
+                gini += (1.0 - score) * (size / m)
+        return gini
+
+    def get_split(self, row_idxs, col_idxs):
+        b_col, b_thres, b_gini, b_groups = np.inf, np.inf, np.inf, None
+        for j in col_idxs:
+            candidates = [np.mean(self.X[row_idxs, j])]
+            for val in candidates:
+                groups = self.get_groups(j, row_idxs, val)
+                gini = self.gini_index(groups)
+                if gini < b_gini:
+                    b_col, b_thres, b_gini, b_groups = j, val, gini, groups
+        splitted = dict()
+        splitted[Func("<", b_thres)] = b_groups[0]
+        splitted[Func(">=", b_thres)] = b_groups[1]
+        return b_col, b_thres, splitted, b_gini
+
     def dtl(self, examples, attributes, parent_examples):
         if len(examples) == 0:
             maj_class, is_pure = self.majority_class(parent_examples)
             dist = self.get_distribution(parent_examples)
-            return Tree(True, maj_class, None, -1, dist)
+            return Tree(True, maj_class, 0, dist)
         maj_class, is_pure = self.majority_class(examples)
         dist = self.get_distribution(examples)
         if is_pure:
-            return Tree(True, maj_class, None, -2, dist)
+            return Tree(True, maj_class, 0, dist)
         elif len(attributes) == 0:
-            return Tree(True, maj_class, None, -3, dist)
+            return Tree(True, maj_class, 0, dist)
         else:
-            best_attr, best_thres, splitted, gr = self.split_attribute(examples, attributes)
+            best_attr, best_thres, splitted, score = None, None, None, 0
+            if self.algo == "c4.5":
+                best_attr, best_thres, splitted, score = self.split_attribute(examples, attributes)
+            elif self.algo == "cart":
+                best_attr, best_thres, splitted, score = self.get_split(examples, attributes)
             attributes = list(attributes)
             attributes.remove(best_attr)
-            tree = Tree(False, best_attr, best_thres, gr, dist)
+            tree = Tree(False, best_attr, score, dist)
             for branch in splitted.keys():
                 tree.add(branch, self.dtl(splitted[branch], attributes, examples))
             return tree
@@ -248,6 +291,7 @@ class DT:
         X = np.array(X)
         y = np.array(y)
         self.initialize(X, y)
+        self.classes = set(y)
         self.tree = self.dtl(self.row_idxs, list(self.col_idxs), self.row_idxs)
         self.tree = self.pruning(self.tree)
 
@@ -347,7 +391,7 @@ class RandomForest:
         k = m
         l = int(math.sqrt(n))
         for i in range(self.n_estimators):
-            dt = DT()
+            dt = DT(algo='cart')
             dt.row_idxs = np.random.choice(m, k)
             dt.col_idxs = list(set(np.random.choice(n, l)))
             dt.fit(self.X, self.y)
